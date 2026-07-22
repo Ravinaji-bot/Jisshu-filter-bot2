@@ -56,7 +56,7 @@ def extract_details_from_caption(caption):
     return ep_info, quality
 
 
-UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
+UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} {}</b>
 
 ────•˚•── ✦ ──•˚•────
 🎭 <b>ɢᴇɴʀᴇs :</b> {}
@@ -72,7 +72,8 @@ UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
 <blockquote><b>Powered by @DragonFireWords 🤞</b></blockquote>"""
 
 QUALITY_CAPTION = """🔗 <b>{} :-</b> <a href="{}">(Click Here)</a> <b>{}</b>\n"""
-    
+
+
 
 notified_movies = set()
 movie_files = defaultdict(list)
