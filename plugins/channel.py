@@ -40,19 +40,39 @@ CAPTION_LANGUAGES = [
     "Urdu",
 ]
 
-UPDATE_CAPTION = """<b>𝖭𝖤𝖶 {} 𝖠𝖣𝖣𝖤𝖣 ✅</b>
+import re
 
-🎬 <b>{} {}</b>
-🔰 <b>Quality:</b> {}
-🎧 <b>Audio:</b> {}
+def extract_details_from_caption(caption):
+    if not caption:
+        return "", "HD"
+    ep_pattern = r'((?:S\d+|Season\s*\d+)?[\s._-]*(?:E\d+[\s._-]*(?:-|to)?[\s._-]*E?\d+|E\d+|Complete|Batch))'
+    ep_match = re.search(ep_pattern, caption, re.IGNORECASE)
+    ep_info = ep_match.group(0).strip() if ep_match else ""
 
-<b>✨ Telegram Files ✨</b>
+    quality_pattern = r'(480p|720p\s*HEVC|720p|1080p\s*HEVC|1080p|2160p|4K)'
+    quality_match = re.search(quality_pattern, caption, re.IGNORECASE)
+    quality = quality_match.group(0).strip() if quality_match else "HD"
 
+    return ep_info, quality
+
+
+UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
+
+────•˚•── ✦ ──•˚•────
+🎭 <b>ɢᴇɴʀᴇs :</b> {}
+⭐ <b>ʀᴀᴛɪɴɢ :</b> {}
+🔊 <b>ᴀᴜᴅɪᴏ  :</b> {}
+🚀 <b>ǫᴜᴀʟɪᴛʏ :</b> WEB-DL
+────•˚•── ✦ ──•˚•────
 {}
+────•˚•── ✦ ──•˚•────
+🧿 <b>How to open link tutorial 👉</b> https://t.me/How_to_Open_Link_33/29
+────•˚•── ✦ ──•˚•────
 
-<blockquote>〽️ Powered by @Jisshu_bots</b></blockquote>"""
+💢 <b>ᴘᴏᴡᴇʀᴇᴅ ʙʏ :</b> @DragonFireWords 🤞"""
 
-QUALITY_CAPTION = """📦 {} : {}\n"""
+QUALITY_CAPTION = """🔗 <b>{} :-</b> <a href="{}">(Click Here)</a> <b>{}</b>\n"""
+    
 
 notified_movies = set()
 movie_files = defaultdict(list)
