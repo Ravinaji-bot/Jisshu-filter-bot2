@@ -42,23 +42,17 @@ CAPTION_LANGUAGES = [
 
 UPDATE_CAPTION = """<b>𝖭𝖤𝖶 {} 𝖠𝖣𝖣𝖤𝖣 ✅</b>
 
-🍿 <b>{} {}</b>
+🎬 <b>{} {}</b>
+🔰 <b>Quality:</b> {}
+🎧 <b>Audio:</b> {}
 
-────•˚•── ✦ ──•˚•────
-🎭 <b>ɢᴇɴʀᴇs :</b> Action, Thriller
-⭐ <b>ʀᴀᴛɪɴɢ :</b> {}
-🔊 <b>ᴀᴜᴅɪᴏ  :</b> {}
-────•˚•── ✦ ──•˚•────
 <b>✨ Telegram Files ✨</b>
 
 {}
-────•˚•── ✦ ──•˚•────
-🧿 <b>How to open link tutorial 👉</b> https://t.me/How_to_Open_Link_33/29
-────•˚•── ✦ ──•˚•────
 
-<blockquote><b>Powered by @DragonFireWords 🤞</b></blockquote>"""
+<blockquote>〽️ Powered by @Jisshu_bots</b></blockquote>"""
 
-QUALITY_CAPTION = """🔗 <b>{} :-</b> <a href="{}">(Click Here)</a> <b>{}</b>\n"""
+QUALITY_CAPTION = """📦 {} : {}\n"""
 
 notified_movies = set()
 movie_files = defaultdict(list)
