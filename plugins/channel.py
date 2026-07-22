@@ -69,7 +69,7 @@ UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
 🧿 <b>How to open link tutorial 👉</b> https://t.me/How_to_Open_Link_33/29
 ────•˚•── ✦ ──•˚•────
 
-💢 <b>ᴘᴏᴡᴇʀᴇᴅ ʙʏ :</b> @DragonFireWords 🤞"""
+<blockquote><b>Powered by @DragonFireWords 🤞</b></blockquote>"""
 
 QUALITY_CAPTION = """🔗 <b>{} :-</b> <a href="{}">(Click Here)</a> <b>{}</b>\n"""
     
