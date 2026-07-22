@@ -53,6 +53,7 @@ UPDATE_CAPTION = """<b>𝖭𝖤𝖶 {} 𝖠𝖣𝖣𝖤𝖣 ✅</b>
 <blockquote>〽️ Powered by @Jisshu_bots</b></blockquote>"""
 
 QUALITY_CAPTION = """📦 {} : {}\n"""
+
 notified_movies = set()
 movie_files = defaultdict(list)
 POST_DELAY = 10
