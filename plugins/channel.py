@@ -127,7 +127,10 @@ async def queue_movie_file(bot, media):
         print(f"Error in queue_movie_file: {e}")
         if file_name in processing_movies:
             processing_movies.remove(file_name)
-        await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+        try:
+            await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+        except Exception:
+            pass
 
 
 async def send_movie_update(bot, file_name, files):
@@ -204,15 +207,20 @@ async def send_movie_update(bot, file_name, files):
                 quality_text += line + "\n"
 
         image_url = poster or "https://te.legra.ph/file/88d845b4f8a024a71465d.jpg"
-        
-        # Format matching UPDATE_CAPTION exact args: Title, Year, Kind/Genres, Language, Links
         full_caption = UPDATE_CAPTION.format(title, year or "2024", kind or "Action, Drama", language, quality_text)
 
         movie_update_channel = await db.movies_update_channel_id()
-        target_channel = movie_update_channel if movie_update_channel else MOVIE_UPDATE_CHANNEL
+        raw_target = movie_update_channel if movie_update_channel else MOVIE_UPDATE_CHANNEL
+        
+        # --- PEER RESOLVER LOGIC ---
+        try:
+            target_chat = await bot.get_chat(int(raw_target))
+            target_channel_id = target_chat.id
+        except Exception:
+            target_channel_id = int(raw_target)
 
         await bot.send_photo(
-            chat_id=int(target_channel),
+            chat_id=target_channel_id,
             photo=image_url,
             caption=full_caption,
             parse_mode=enums.ParseMode.HTML
@@ -220,7 +228,10 @@ async def send_movie_update(bot, file_name, files):
 
     except Exception as e:
         print('Failed to send movie update. Error - ', e)
-        await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+        try:
+            await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+        except Exception:
+            pass
 
 
 async def get_imdb(file_name):
@@ -347,4 +358,3 @@ def format_file_size(size_bytes):
             return f"{size_bytes:.2f} {unit}"
         size_bytes /= 1024
     return f"{size_bytes:.2f} PB"
-    
