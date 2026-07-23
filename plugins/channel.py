@@ -38,7 +38,10 @@ QUALITY_CAPTION = """🔗 <b>{} :-</b> <a href="{}">(Click Here)</a> <b>{}</b>\n
 
 notified_movies = set()
 movie_files = defaultdict(list)
-POST_DELAY = 10
+
+# Delay in seconds to wait for ALL quality files before posting
+POST_DELAY = 35
+
 processing_movies = set()
 
 media_filter = filters.document | filters.video | filters.audio
@@ -48,31 +51,34 @@ media_filter = filters.document | filters.video | filters.audio
 async def media(bot, message):
     bot_id = bot.me.id
     media = getattr(message, message.media.value, None)
-    if media.mime_type in ["video/mp4", "video/x-matroska", "document/mp4"]:
+    if media and media.mime_type in ["video/mp4", "video/x-matroska", "document/mp4"]:
         media.file_type = message.media.value
         media.caption = message.caption
         success_sts = await save_file(media)
         if success_sts == "suc" and await db.get_send_movie_update_status(bot_id):
-            file_id, file_ref = unpack_new_file_id(media.file_id)
             await queue_movie_file(bot, media)
 
 
 async def queue_movie_file(bot, media):
+    file_name = await movie_name_format(media.file_name or "")
     try:
-        file_name = await movie_name_format(media.file_name)
-        caption = await movie_name_format(media.caption)
-        year_match = re.search(r"\b(19|20)\d{2}\b", caption)
+        caption = await movie_name_format(media.caption or "")
+        year_match = re.search(r"\b(19|20)\d{2}\b", caption) or re.search(r"\b(19|20)\d{2}\b", file_name)
         year = year_match.group(0) if year_match else None
+        
         season_match = re.search(r"(?i)(?:s|season)0*(\d{1,2})", caption) or re.search(
             r"(?i)(?:s|season)0*(\d{1,2})", file_name
         )
-        if year:
-            file_name = file_name[: file_name.find(year) + 4]
-        elif season_match:
-            season = season_match.group(1)
-            file_name = file_name[: file_name.find(season) + 1]
+        if year and file_name.find(year) != -1:
+            clean_title = file_name[: file_name.find(year) + 4]
+        elif season_match and file_name.find(season_match.group(1)) != -1:
+            clean_title = file_name[: file_name.find(season_match.group(1)) + 1]
+        else:
+            clean_title = file_name
+
         quality = await get_qualities(caption) or "HDRip"
-        jisshuquality = await Jisshu_qualities(caption, media.file_name) or "720p"
+        jisshuquality = await Jisshu_qualities(caption, media.file_name or "") or "720p"
+        
         language = (
             ", ".join(
                 [lang for lang in CAPTION_LANGUAGES if lang.lower() in caption.lower()]
@@ -81,7 +87,8 @@ async def queue_movie_file(bot, media):
         )
         file_size_str = format_file_size(media.file_size)
         file_id, file_ref = unpack_new_file_id(media.file_id)
-        movie_files[file_name].append(
+        
+        movie_files[clean_title].append(
             {
                 "quality": quality,
                 "jisshuquality": jisshuquality,
@@ -92,24 +99,26 @@ async def queue_movie_file(bot, media):
                 "year": year,
             }
         )
-        if file_name in processing_movies:
+        
+        if clean_title in processing_movies:
             return
-        processing_movies.add(file_name)
+            
+        processing_movies.add(clean_title)
+        
         try:
+            # Wait 35s to collect all 4 qualities!
             await asyncio.sleep(POST_DELAY)
-            if file_name in movie_files:
-                await send_movie_update(bot, file_name, movie_files[file_name])
-                del movie_files[file_name]
+            if clean_title in movie_files:
+                await send_movie_update(bot, clean_title, movie_files[clean_title])
+                del movie_files[clean_title]
         finally:
-            processing_movies.remove(file_name)
+            if clean_title in processing_movies:
+                processing_movies.remove(clean_title)
+                
     except Exception as e:
         print(f"Error in queue_movie_file: {e}")
         if file_name in processing_movies:
             processing_movies.remove(file_name)
-        try:
-            await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}")
-        except Exception:
-            pass
 
 
 async def send_movie_update(bot, file_name, files):
@@ -120,11 +129,10 @@ async def send_movie_update(bot, file_name, files):
 
         imdb_data = await get_imdb(file_name)
         title = imdb_data.get("title", file_name)
-        year_match = re.search(r"\b(19|20)\d{2}\b", file_name)
-        year = year_match.group(0) if year_match else (files[0]['year'] or "2024")
-        poster = await fetch_movie_poster(title, files[0]["year"])
+        year = imdb_data.get("year") or (files[0]['year'] if files else "2026")
+        poster = await fetch_movie_poster(title, year)
         kind = imdb_data.get("kind", "Action, Drama").strip().upper().replace(" ", "_") if imdb_data else "Action, Drama"
-        if kind in ["TV_SERIES", "MOVIE", ""]:
+        if kind in ["TV_SERIES", "MOVIE", "", "NONE"]:
            kind = "Action, Drama"
            
         languages = set()
@@ -187,32 +195,43 @@ async def send_movie_update(bot, file_name, files):
                 quality_text += line + "\n"
 
         image_url = poster or "https://te.legra.ph/file/88d845b4f8a024a71465d.jpg"
-        
-        # Exact Matching 5 Arguments for UPDATE_CAPTION
         full_caption = UPDATE_CAPTION.format(title, year, kind, language, quality_text)
 
         movie_update_channel = await db.movies_update_channel_id()
         raw_target = movie_update_channel if movie_update_channel else MOVIE_UPDATE_CHANNEL
         
+        target_chat_id = None
         try:
-            target_chat = await bot.get_chat(int(raw_target))
-            target_channel_id = target_chat.id
+            if str(raw_target).startswith("-100") or str(raw_target).isdigit():
+                target_chat_id = int(raw_target)
+            else:
+                target_chat_id = str(raw_target)
         except Exception:
-            target_channel_id = int(raw_target)
+            target_chat_id = raw_target
 
-        await bot.send_photo(
-            chat_id=target_channel_id,
-            photo=image_url,
-            caption=full_caption,
-            parse_mode=enums.ParseMode.HTML
-        )
+        try:
+            await bot.send_photo(
+                chat_id=target_chat_id,
+                photo=image_url,
+                caption=full_caption,
+                parse_mode=enums.ParseMode.HTML
+            )
+        except Exception as send_err:
+            print(f"Error sending photo to channel: {send_err}")
+            # Try getting chat explicitly if standard send failed
+            try:
+                chat_obj = await bot.get_chat(target_chat_id)
+                await bot.send_photo(
+                    chat_id=chat_obj.id,
+                    photo=image_url,
+                    caption=full_caption,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            except Exception as final_err:
+                print(f"Final Send Failed: {final_err}")
 
     except Exception as e:
         print('Failed to send movie update. Error - ', e)
-        try:
-            await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}")
-        except Exception:
-            pass
 
 
 async def get_imdb(file_name):
