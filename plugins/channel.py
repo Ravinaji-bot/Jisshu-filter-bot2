@@ -18,7 +18,7 @@ CAPTION_LANGUAGES = [
     "Portuguese", "Russian", "Japanese", "Odia", "Assamese", "Urdu"
 ]
 
-# NEW DESIGN CAPTION TEMPLATE
+# AESTHETIC NEW DESIGN CAPTION
 UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
 
 ────•˚•── ✦ ──•˚•────
@@ -34,13 +34,11 @@ UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
 
 <blockquote><b>Powered by @DragonFireWords 🤞</b></blockquote>"""
 
-QUALITY_CAPTION = """🔗 <b>{} :-</b> <a href="{}">(Click Here)</a> <b>{}</b>\n"""
-
 notified_movies = set()
 movie_files = defaultdict(list)
 
-# Delay in seconds to wait for ALL quality files before posting
-POST_DELAY = 35
+# Waittime in seconds to collect ALL uploaded qualities
+POST_DELAY = 25
 
 processing_movies = set()
 
@@ -61,64 +59,52 @@ async def media(bot, message):
 
 async def queue_movie_file(bot, media):
     file_name = await movie_name_format(media.file_name or "")
-    try:
-        caption = await movie_name_format(media.caption or "")
-        year_match = re.search(r"\b(19|20)\d{2}\b", caption) or re.search(r"\b(19|20)\d{2}\b", file_name)
-        year = year_match.group(0) if year_match else None
-        
-        season_match = re.search(r"(?i)(?:s|season)0*(\d{1,2})", caption) or re.search(
-            r"(?i)(?:s|season)0*(\d{1,2})", file_name
-        )
-        if year and file_name.find(year) != -1:
-            clean_title = file_name[: file_name.find(year) + 4]
-        elif season_match and file_name.find(season_match.group(1)) != -1:
-            clean_title = file_name[: file_name.find(season_match.group(1)) + 1]
-        else:
-            clean_title = file_name
+    caption = await movie_name_format(media.caption or "")
+    
+    # Extract clean title for grouping qualities
+    year_match = re.search(r"\b(19|20)\d{2}\b", caption) or re.search(r"\b(19|20)\d{2}\b", file_name)
+    year = year_match.group(0) if year_match else None
+    
+    clean_title = file_name
+    if year and file_name.find(year) != -1:
+        clean_title = file_name[: file_name.find(year) + 4].strip()
 
-        quality = await get_qualities(caption) or "HDRip"
-        jisshuquality = await Jisshu_qualities(caption, media.file_name or "") or "720p"
+    quality = await Jisshu_qualities(caption, media.file_name or "") or "720p"
+    file_size_str = format_file_size(media.file_size)
+    file_id, file_ref = unpack_new_file_id(media.file_id)
+    
+    language = (
+        ", ".join([lang for lang in CAPTION_LANGUAGES if lang.lower() in caption.lower()])
+        or "Hindi"
+    )
+
+    movie_files[clean_title].append(
+        {
+            "quality": quality,
+            "file_id": file_id,
+            "file_size": file_size_str,
+            "caption": caption,
+            "language": language,
+            "year": year,
+        }
+    )
+    
+    if clean_title in processing_movies:
+        return
         
-        language = (
-            ", ".join(
-                [lang for lang in CAPTION_LANGUAGES if lang.lower() in caption.lower()]
-            )
-            or "Hindi"
-        )
-        file_size_str = format_file_size(media.file_size)
-        file_id, file_ref = unpack_new_file_id(media.file_id)
-        
-        movie_files[clean_title].append(
-            {
-                "quality": quality,
-                "jisshuquality": jisshuquality,
-                "file_id": file_id,
-                "file_size": file_size_str,
-                "caption": caption,
-                "language": language,
-                "year": year,
-            }
-        )
-        
-        if clean_title in processing_movies:
-            return
-            
-        processing_movies.add(clean_title)
-        
-        try:
-            # Wait 35s to collect all 4 qualities!
-            await asyncio.sleep(POST_DELAY)
-            if clean_title in movie_files:
-                await send_movie_update(bot, clean_title, movie_files[clean_title])
-                del movie_files[clean_title]
-        finally:
-            if clean_title in processing_movies:
-                processing_movies.remove(clean_title)
-                
+    processing_movies.add(clean_title)
+    
+    try:
+        # Wait 25 seconds for all 4 files to upload completely
+        await asyncio.sleep(POST_DELAY)
+        if clean_title in movie_files:
+            await send_movie_update(bot, clean_title, movie_files[clean_title])
+            del movie_files[clean_title]
     except Exception as e:
-        print(f"Error in queue_movie_file: {e}")
-        if file_name in processing_movies:
-            processing_movies.remove(file_name)
+        print(f"Queue Error: {e}")
+    finally:
+        if clean_title in processing_movies:
+            processing_movies.remove(clean_title)
 
 
 async def send_movie_update(bot, file_name, files):
@@ -129,9 +115,10 @@ async def send_movie_update(bot, file_name, files):
 
         imdb_data = await get_imdb(file_name)
         title = imdb_data.get("title", file_name)
-        year = imdb_data.get("year") or (files[0]['year'] if files else "2026")
+        year = imdb_data.get("year") or (files[0]['year'] if files and files[0].get('year') else "2026")
         poster = await fetch_movie_poster(title, year)
         kind = imdb_data.get("kind", "Action, Drama").strip().upper().replace(" ", "_") if imdb_data else "Action, Drama"
+        
         if kind in ["TV_SERIES", "MOVIE", "", "NONE"]:
            kind = "Action, Drama"
            
@@ -141,58 +128,21 @@ async def send_movie_update(bot, file_name, files):
                 languages.update(file["language"].split(", "))
         language = ", ".join(sorted(languages)) or "Hindi"
 
-        episode_pattern = re.compile(r"S(\d{1,2})E(\d{1,2})", re.IGNORECASE)
-        combined_pattern = re.compile(r"S(\d{1,2})\s*E(\d{1,2})[-~]E?(\d{1,2})", re.IGNORECASE)
-        episode_map = defaultdict(dict)
-        combined_links = []
-
+        # Quality Link Builder
+        quality_groups = defaultdict(list)
         for file in files:
-            caption = file["caption"]
-            quality = file.get("jisshuquality") or file.get("quality") or "720p"
-            size = file["file_size"]
-            file_id = file['file_id']
-            match = episode_pattern.search(caption)
-            combined_match = combined_pattern.search(caption)
-
-            if match:
-                ep = f"S{int(match.group(1)):02d}E{int(match.group(2)):02d}"
-                episode_map[ep][quality] = file
-            elif combined_match:
-                season = f"S{int(combined_match.group(1)):02d}"
-                ep_range = f"E{int(combined_match.group(2)):02d}-{int(combined_match.group(3)):02d}"
-                ep = f"{season}{ep_range}"
-                link_url = f"https://t.me/{temp.U_NAME}?start=file_0_{file_id}"
-                combined_links.append(f"🔗 <b>{ep} ({quality}) :-</b> <a href='{link_url}'>(Click Here)</a> <b>{size}</b>")
-            elif re.search(r"complete|completed|batch|combined", caption, re.IGNORECASE):
-                link_url = f"https://t.me/{temp.U_NAME}?start=file_0_{file_id}"
-                combined_links.append(f"🔗 <b>({quality}) :-</b> <a href='{link_url}'>(Click Here)</a> <b>{size}</b>")
+            q = file.get("quality", "720p")
+            quality_groups[q].append(file)
 
         quality_text = ""
-
-        for ep, qualities in sorted(episode_map.items()):
-            parts = []
-            for quality in sorted(qualities.keys()):
-                f = qualities[quality]
+        for quality, q_files in sorted(quality_groups.items()):
+            links = []
+            for f in q_files:
                 link_url = f"https://t.me/{temp.U_NAME}?start=file_0_{f['file_id']}"
-                link = f"<a href='{link_url}'>(Click Here)</a> <b>{f['file_size']}</b>"
-                parts.append(link)
-            joined = " - ".join(parts)
-            quality_text += f"🔗 <b>{ep} :-</b> {joined}\n"
-
-        if combined_links:
-            quality_text += "\n<b>COMBiNED</b> ✅\n\n"
-            quality_text += "\n".join(combined_links) + "\n"
+                links.append(f"<a href='{link_url}'>(Click Here)</a> <b>{f['file_size']}</b>")
             
-        if not quality_text:
-            quality_groups = defaultdict(list)
-            for file in files:
-                quality = file.get("jisshuquality") or file.get("quality") or "720p"
-                quality_groups[quality].append(file)
-
-            for quality, q_files in sorted(quality_groups.items()):
-                links = [f"<a href='https://t.me/{temp.U_NAME}?start=file_0_{f['file_id']}';>(Click Here)</a> <b>{f['file_size']}</b>" for f in q_files]
-                line = f"🔗 <b>{quality} :-</b> " + " | ".join(links)
-                quality_text += line + "\n"
+            line = f"🔗 <b>{quality} :-</b> " + " | ".join(links)
+            quality_text += line + "\n"
 
         image_url = poster or "https://te.legra.ph/file/88d845b4f8a024a71465d.jpg"
         full_caption = UPDATE_CAPTION.format(title, year, kind, language, quality_text)
@@ -200,38 +150,17 @@ async def send_movie_update(bot, file_name, files):
         movie_update_channel = await db.movies_update_channel_id()
         raw_target = movie_update_channel if movie_update_channel else MOVIE_UPDATE_CHANNEL
         
-        target_chat_id = None
-        try:
-            if str(raw_target).startswith("-100") or str(raw_target).isdigit():
-                target_chat_id = int(raw_target)
-            else:
-                target_chat_id = str(raw_target)
-        except Exception:
-            target_chat_id = raw_target
+        target_chat_id = int(raw_target) if str(raw_target).replace('-', '').isdigit() else raw_target
 
-        try:
-            await bot.send_photo(
-                chat_id=target_chat_id,
-                photo=image_url,
-                caption=full_caption,
-                parse_mode=enums.ParseMode.HTML
-            )
-        except Exception as send_err:
-            print(f"Error sending photo to channel: {send_err}")
-            # Try getting chat explicitly if standard send failed
-            try:
-                chat_obj = await bot.get_chat(target_chat_id)
-                await bot.send_photo(
-                    chat_id=chat_obj.id,
-                    photo=image_url,
-                    caption=full_caption,
-                    parse_mode=enums.ParseMode.HTML
-                )
-            except Exception as final_err:
-                print(f"Final Send Failed: {final_err}")
+        await bot.send_photo(
+            chat_id=target_chat_id,
+            photo=image_url,
+            caption=full_caption,
+            parse_mode=enums.ParseMode.HTML
+        )
 
     except Exception as e:
-        print('Failed to send movie update. Error - ', e)
+        print('Error in send_movie_update:', e)
 
 
 async def get_imdb(file_name):
@@ -273,25 +202,12 @@ def generate_unique_id(movie_name):
     return hashlib.md5(movie_name.encode("utf-8")).hexdigest()[:5]
 
 
-async def get_qualities(text):
-    qualities = [
-        "480p", "720p", "720p HEVC", "1080p", "ORG", "org", "hdcam", "HDCAM",
-        "HQ", "hq", "HDRip", "hdrip", "camrip", "WEB-DL", "CAMRip", "hdtc",
-        "predvd", "DVDscr", "dvdscr", "dvdrip", "HDTC", "dvdscreen", "HDTS", "hdts"
-    ]
-    found_qualities = [q for q in qualities if q.lower() in text.lower()]
-    return ", ".join(found_qualities) or "HDRip"
-
-
 async def Jisshu_qualities(text, file_name):
-    qualities = ["480p", "720p", "720p HEVC", "1080p", "1080p HEVC", "2160p"]
+    qualities = ["480p", "720p HEVC", "720p", "1080p HEVC", "1080p", "2160p", "ORG", "HDTS", "HDRip"]
     combined_text = (text.lower() + " " + file_name.lower()).strip()
-    if "hevc" in combined_text:
-        for quality in qualities:
-            if "HEVC" in quality and quality.split()[0].lower() in combined_text:
-                return quality
+    
     for quality in qualities:
-        if "HEVC" not in quality and quality.lower() in combined_text:
+        if quality.lower() in combined_text:
             return quality
     return "720p"
 
