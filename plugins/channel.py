@@ -4,7 +4,7 @@ import hashlib
 import asyncio
 from info import *
 from utils import *
-from pyrogram import Client, filters
+from pyrogram import Client, filters, enums
 from database.users_chats_db import db
 from database.ia_filterdb import save_file, unpack_new_file_id
 import aiohttp
@@ -40,19 +40,22 @@ CAPTION_LANGUAGES = [
     "Urdu",
 ]
 
-UPDATE_CAPTION = """<b>𝖭𝖤𝖶 {} 𝖠𝖣𝖣𝖤𝖣 ✅</b>
+UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
 
-🎬 <b>{} {}</b>
-🔰 <b>Quality:</b> {}
-🎧 <b>Audio:</b> {}
-
-<b>✨ Telegram Files ✨</b>
-
+────•˚•── ✦ ──•˚•────
+🎭 <b>ɢᴇɴʀᴇs :</b> {}
+⭐ <b>ʀᴀᴛɪɴɢ :</b> HD
+🔊 <b>ᴀᴜᴅɪᴏ  :</b> {}
+🚀 <b>ǫᴜᴀʟɪᴛʏ :</b> WEB-DL
+────•˚•── ✦ ──•˚•────
 {}
+────•˚•── ✦ ──•˚•────
+🧿 <b>How to open link tutorial 👉</b> https://t.me/How_to_Open_Link_33/29
+────•˚•── ✦ ──•˚•────
 
-<blockquote>〽️ Powered by @Jisshu_bots</b></blockquote>"""
+<blockquote><b>Powered by @DragonFireWords 🤞</b></blockquote>"""
 
-QUALITY_CAPTION = """📦 {} : {}\n"""
+QUALITY_CAPTION = """🔗 <b>{} :-</b> <a href="{}">(Click Here)</a> <b>{}</b>\n"""
 
 notified_movies = set()
 movie_files = defaultdict(list)
@@ -124,7 +127,8 @@ async def queue_movie_file(bot, media):
         print(f"Error in queue_movie_file: {e}")
         if file_name in processing_movies:
             processing_movies.remove(file_name)
-        await bot.send_message(LOG_CHANNEL, f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+        await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+
 
 async def send_movie_update(bot, file_name, files):
     try:
@@ -135,7 +139,7 @@ async def send_movie_update(bot, file_name, files):
         imdb_data = await get_imdb(file_name)
         title = imdb_data.get("title", file_name)
         year_match = re.search(r"\b(19|20)\d{2}\b", file_name)
-        year = year_match.group(0) if year_match else None
+        year = year_match.group(0) if year_match else (files[0]['year'] or "2024")
         poster = await fetch_movie_poster(title, files[0]["year"])
         kind = imdb_data.get("kind", "").strip().upper().replace(" ", "_") if imdb_data else ""
         if kind == "TV_SERIES":
@@ -144,7 +148,7 @@ async def send_movie_update(bot, file_name, files):
         for file in files:
             if file["language"] != "Not Idea":
                 languages.update(file["language"].split(", "))
-        language = ", ".join(sorted(languages)) or "Not Idea"
+        language = ", ".join(sorted(languages)) or "Hindi"
 
         episode_pattern = re.compile(r"S(\d{1,2})E(\d{1,2})", re.IGNORECASE)
         combined_pattern = re.compile(r"S(\d{1,2})\s*E(\d{1,2})[-~]E?(\d{1,2})", re.IGNORECASE)
@@ -166,9 +170,11 @@ async def send_movie_update(bot, file_name, files):
                 season = f"S{int(combined_match.group(1)):02d}"
                 ep_range = f"E{int(combined_match.group(2)):02d}-{int(combined_match.group(3)):02d}"
                 ep = f"{season}{ep_range}"
-                combined_links.append(f"📦 {ep} ({quality}) : <a href='https://t.me/{temp.U_NAME}?start=file_0_{file_id}'>{size}</a>")
+                link_url = f"https://t.me/{temp.U_NAME}?start=file_0_{file_id}"
+                combined_links.append(f"🔗 <b>{ep} ({quality}) :-</b> <a href='{link_url}'>(Click Here)</a> <b>{size}</b>")
             elif re.search(r"complete|completed|batch|combined", caption, re.IGNORECASE):
-                combined_links.append(f"📦 ({quality}) : <a href='https://t.me/{temp.U_NAME}?start=file_0_{file_id}'>{size}</a>")
+                link_url = f"https://t.me/{temp.U_NAME}?start=file_0_{file_id}"
+                combined_links.append(f"🔗 <b>({quality}) :-</b> <a href='{link_url}'>(Click Here)</a> <b>{size}</b>")
 
         quality_text = ""
 
@@ -176,10 +182,11 @@ async def send_movie_update(bot, file_name, files):
             parts = []
             for quality in sorted(qualities.keys()):
                 f = qualities[quality]
-                link = f"<a href='https://t.me/{temp.U_NAME}?start=file_0_{f['file_id']}'>{quality}</a>"
+                link_url = f"https://t.me/{temp.U_NAME}?start=file_0_{f['file_id']}"
+                link = f"<a href='{link_url}'>(Click Here)</a> <b>{f['file_size']}</b>"
                 parts.append(link)
             joined = " - ".join(parts)
-            quality_text += f"📦 {ep} : {joined}\n"
+            quality_text += f"🔗 <b>{ep} :-</b> {joined}\n"
 
         if combined_links:
             quality_text += "\n<b>COMBiNED</b> ✅\n\n"
@@ -192,16 +199,20 @@ async def send_movie_update(bot, file_name, files):
                 quality_groups[quality].append(file)
 
             for quality, q_files in sorted(quality_groups.items()):
-                links = [f"<a href='https://t.me/{temp.U_NAME}?start=file_0_{f['file_id']}'>{f['file_size']}</a>" for f in q_files]
-                line = f"📦 {quality} : " + " | ".join(links)
+                links = [f"<a href='https://t.me/{temp.U_NAME}?start=file_0_{f['file_id']}';>(Click Here)</a> <b>{f['file_size']}</b>" for f in q_files]
+                line = f"🔗 <b>{quality} :-</b> " + " | ".join(links)
                 quality_text += line + "\n"
 
         image_url = poster or "https://te.legra.ph/file/88d845b4f8a024a71465d.jpg"
-        full_caption = UPDATE_CAPTION.format(kind, title, year, files[0]['quality'], language, quality_text)
+        
+        # Format matching UPDATE_CAPTION exact args: Title, Year, Kind/Genres, Language, Links
+        full_caption = UPDATE_CAPTION.format(title, year or "2024", kind or "Action, Drama", language, quality_text)
 
         movie_update_channel = await db.movies_update_channel_id()
+        target_channel = movie_update_channel if movie_update_channel else MOVIE_UPDATE_CHANNEL
+
         await bot.send_photo(
-            chat_id=movie_update_channel if movie_update_channel else MOVIE_UPDATE_CHANNEL,
+            chat_id=int(target_channel),
             photo=image_url,
             caption=full_caption,
             parse_mode=enums.ParseMode.HTML
@@ -209,7 +220,7 @@ async def send_movie_update(bot, file_name, files):
 
     except Exception as e:
         print('Failed to send movie update. Error - ', e)
-        await bot.send_message(LOG_CHANNEL, f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+        await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
 
 
 async def get_imdb(file_name):
@@ -336,3 +347,4 @@ def format_file_size(size_bytes):
             return f"{size_bytes:.2f} {unit}"
         size_bytes /= 1024
     return f"{size_bytes:.2f} PB"
+    
