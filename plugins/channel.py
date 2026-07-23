@@ -12,34 +12,13 @@ from typing import Optional
 from collections import defaultdict
 
 CAPTION_LANGUAGES = [
-    "Bhojpuri",
-    "Hindi",
-    "Bengali",
-    "Tamil",
-    "English",
-    "Bangla",
-    "Telugu",
-    "Malayalam",
-    "Kannada",
-    "Marathi",
-    "Punjabi",
-    "Bengoli",
-    "Gujrati",
-    "Korean",
-    "Gujarati",
-    "Spanish",
-    "French",
-    "German",
-    "Chinese",
-    "Arabic",
-    "Portuguese",
-    "Russian",
-    "Japanese",
-    "Odia",
-    "Assamese",
-    "Urdu",
+    "Bhojpuri", "Hindi", "Bengali", "Tamil", "English", "Bangla", "Telugu",
+    "Malayalam", "Kannada", "Marathi", "Punjabi", "Bengoli", "Gujrati",
+    "Korean", "Gujarati", "Spanish", "French", "German", "Chinese", "Arabic",
+    "Portuguese", "Russian", "Japanese", "Odia", "Assamese", "Urdu"
 ]
 
+# NEW DESIGN CAPTION TEMPLATE
 UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
 
 ────•˚•── ✦ ──•˚•────
@@ -98,7 +77,7 @@ async def queue_movie_file(bot, media):
             ", ".join(
                 [lang for lang in CAPTION_LANGUAGES if lang.lower() in caption.lower()]
             )
-            or "Not Idea"
+            or "Hindi"
         )
         file_size_str = format_file_size(media.file_size)
         file_id, file_ref = unpack_new_file_id(media.file_id)
@@ -128,7 +107,7 @@ async def queue_movie_file(bot, media):
         if file_name in processing_movies:
             processing_movies.remove(file_name)
         try:
-            await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+            await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}")
         except Exception:
             pass
 
@@ -144,9 +123,10 @@ async def send_movie_update(bot, file_name, files):
         year_match = re.search(r"\b(19|20)\d{2}\b", file_name)
         year = year_match.group(0) if year_match else (files[0]['year'] or "2024")
         poster = await fetch_movie_poster(title, files[0]["year"])
-        kind = imdb_data.get("kind", "").strip().upper().replace(" ", "_") if imdb_data else ""
-        if kind == "TV_SERIES":
-           kind = "SERIES"
+        kind = imdb_data.get("kind", "Action, Drama").strip().upper().replace(" ", "_") if imdb_data else "Action, Drama"
+        if kind in ["TV_SERIES", "MOVIE", ""]:
+           kind = "Action, Drama"
+           
         languages = set()
         for file in files:
             if file["language"] != "Not Idea":
@@ -160,7 +140,7 @@ async def send_movie_update(bot, file_name, files):
 
         for file in files:
             caption = file["caption"]
-            quality = file.get("jisshuquality") or file.get("quality") or "Unknown"
+            quality = file.get("jisshuquality") or file.get("quality") or "720p"
             size = file["file_size"]
             file_id = file['file_id']
             match = episode_pattern.search(caption)
@@ -198,7 +178,7 @@ async def send_movie_update(bot, file_name, files):
         if not quality_text:
             quality_groups = defaultdict(list)
             for file in files:
-                quality = file.get("jisshuquality") or file.get("quality") or "Unknown"
+                quality = file.get("jisshuquality") or file.get("quality") or "720p"
                 quality_groups[quality].append(file)
 
             for quality, q_files in sorted(quality_groups.items()):
@@ -207,12 +187,13 @@ async def send_movie_update(bot, file_name, files):
                 quality_text += line + "\n"
 
         image_url = poster or "https://te.legra.ph/file/88d845b4f8a024a71465d.jpg"
-        full_caption = UPDATE_CAPTION.format(title, year or "2024", kind or "Action, Drama", language, quality_text)
+        
+        # Exact Matching 5 Arguments for UPDATE_CAPTION
+        full_caption = UPDATE_CAPTION.format(title, year, kind, language, quality_text)
 
         movie_update_channel = await db.movies_update_channel_id()
         raw_target = movie_update_channel if movie_update_channel else MOVIE_UPDATE_CHANNEL
         
-        # --- PEER RESOLVER LOGIC ---
         try:
             target_chat = await bot.get_chat(int(raw_target))
             target_channel_id = target_chat.id
@@ -229,7 +210,7 @@ async def send_movie_update(bot, file_name, files):
     except Exception as e:
         print('Failed to send movie update. Error - ', e)
         try:
-            await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}'\n\n<blockquote>If you don’t understand this error, you can ask in our support group: @Jisshu_support.</blockquote>")
+            await bot.send_message(int(LOG_CHANNEL), f"Failed to send movie update. Error - {e}")
         except Exception:
             pass
 
@@ -258,26 +239,14 @@ async def fetch_movie_poster(title: str, year: Optional[int] = None) -> Optional
         try:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as res:
                 if res.status != 200:
-                    print(f"API Error: HTTP {res.status}")
                     return None
                 data = await res.json()
-
                 for key in ["jisshu-2", "jisshu-3", "jisshu-4"]:
                     posters = data.get(key)
                     if posters and isinstance(posters, list) and posters:
                         return posters[0]
-
-                print(f"No Poster Found in jisshu-2/3/4 for Title: {title}")
                 return None
-
-        except aiohttp.ClientError as e:
-            print(f"Network Error: {e}")
-            return None
-        except asyncio.TimeoutError:
-            print("Request Timed Out")
-            return None
-        except Exception as e:
-            print(f"Unexpected Error: {e}")
+        except Exception:
             return None
 
 
@@ -287,30 +256,9 @@ def generate_unique_id(movie_name):
 
 async def get_qualities(text):
     qualities = [
-        "480p",
-        "720p",
-        "720p HEVC",
-        "1080p",
-        "ORG",
-        "org",
-        "hdcam",
-        "HDCAM",
-        "HQ",
-        "hq",
-        "HDRip",
-        "hdrip",
-        "camrip",
-        "WEB-DL",
-        "CAMRip",
-        "hdtc",
-        "predvd",
-        "DVDscr",
-        "dvdscr",
-        "dvdrip",
-        "HDTC",
-        "dvdscreen",
-        "HDTS",
-        "hdts",
+        "480p", "720p", "720p HEVC", "1080p", "ORG", "org", "hdcam", "HDCAM",
+        "HQ", "hq", "HDRip", "hdrip", "camrip", "WEB-DL", "CAMRip", "hdtc",
+        "predvd", "DVDscr", "dvdscr", "dvdrip", "HDTC", "dvdscreen", "HDTS", "hdts"
     ]
     found_qualities = [q for q in qualities if q.lower() in text.lower()]
     return ", ".join(found_qualities) or "HDRip"
