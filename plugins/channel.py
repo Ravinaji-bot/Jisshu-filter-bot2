@@ -18,7 +18,6 @@ CAPTION_LANGUAGES = [
     "Portuguese", "Russian", "Japanese", "Odia", "Assamese", "Urdu"
 ]
 
-# NEW HIGH-LOOK AESTHETIC CAPTION
 UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
 
 ────•˚•── ✦ ──•˚•────
@@ -36,8 +35,6 @@ UPDATE_CAPTION = """🍿 <b>Movie / Series :- {} ({})</b>
 
 notified_movies = set()
 movie_files = defaultdict(list)
-
-# 30 Seconds Delay to Collect All Uploaded Qualities Completely
 POST_DELAY = 30
 processing_movies = set()
 
@@ -60,7 +57,6 @@ async def queue_movie_file(bot, media):
     file_name = await movie_name_format(media.file_name or "")
     caption = await movie_name_format(media.caption or "")
     
-    # Clean Title extraction to prevent splitting qualities into different posts
     year_match = re.search(r"\b(19|20)\d{2}\b", caption) or re.search(r"\b(19|20)\d{2}\b", file_name)
     year = year_match.group(0) if year_match else None
     
@@ -94,13 +90,12 @@ async def queue_movie_file(bot, media):
     processing_movies.add(clean_title)
     
     try:
-        # Collects all 4 qualities in 30 seconds buffer
         await asyncio.sleep(POST_DELAY)
         if clean_title in movie_files:
             await send_movie_update(bot, clean_title, movie_files[clean_title])
             del movie_files[clean_title]
     except Exception as e:
-        print(f"Queue Exception: {e}")
+        print(f"Queue Error: {e}")
     finally:
         if clean_title in processing_movies:
             processing_movies.remove(clean_title)
@@ -127,7 +122,6 @@ async def send_movie_update(bot, file_name, files):
                 languages.update(file["language"].split(", "))
         language = ", ".join(sorted(languages)) or "Hindi"
 
-        # Quality Links Construction
         quality_groups = defaultdict(list)
         for file in files:
             q = file.get("quality", "720p")
@@ -144,8 +138,6 @@ async def send_movie_update(bot, file_name, files):
             quality_text += line + "\n"
 
         image_url = poster or "https://te.legra.ph/file/88d845b4f8a024a71465d.jpg"
-        
-        # Exact 5 Parameters for UPDATE_CAPTION
         full_caption = UPDATE_CAPTION.format(title, year, kind, language, quality_text)
 
         movie_update_channel = await db.movies_update_channel_id()
@@ -153,7 +145,6 @@ async def send_movie_update(bot, file_name, files):
         
         target_chat_id = int(raw_target) if str(raw_target).replace('-', '').isdigit() else raw_target
 
-        # Clean single-send call
         await bot.send_photo(
             chat_id=target_chat_id,
             photo=image_url,
